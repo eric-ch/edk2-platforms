@@ -41,6 +41,8 @@ DisconnectAll (
   UINTN HandleCount;
   EFI_HANDLE *HandleBuffer;
   UINTN HandleIndex;
+  EFI_TPL Tpl;
+  BOOLEAN MitigateTpl;
 
   /*
    * Retrieve the list of all handles from the handle database
@@ -56,8 +58,18 @@ DisconnectAll (
       return;
   }
 
+  // Lower to TPL_CALLBACK at least. Some drivers will try to raise to
+  // TPL_CALLBACK, so TPL_NOTIFY and above cannot be maintained here.
+  Tpl = EfiGetCurrentTpl ();
+  MitigateTpl = Tpl > TPL_CALLBACK;
+  if (MitigateTpl) {
+    gBS->RestoreTPL (TPL_CALLBACK);
+  }
   for (HandleIndex = 0; HandleIndex < HandleCount; HandleIndex++) {
     gBS->DisconnectController (HandleBuffer[HandleIndex], NULL, NULL);
+  }
+  if (MitigateTpl) {
+    gBS->RaiseTPL (Tpl);
   }
 
   gBS->FreePool(HandleBuffer);
